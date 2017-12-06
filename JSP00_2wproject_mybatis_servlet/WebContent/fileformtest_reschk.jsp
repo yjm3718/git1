@@ -14,7 +14,7 @@ String url = request.getParameter("url");
 
 
 %>
-  gitchan
+
 <body>
 
 
