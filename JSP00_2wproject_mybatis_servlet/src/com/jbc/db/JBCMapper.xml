@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 맵퍼 네임 스페이스의 com.my.myboard는 그냥 이름임. -->
+<mapper namespace="com.jb.jboardcomment">
+
+	<!-- column은 DB컬럼으로 대소문자 구분 없음. property는 dto변수명으로 대소문자 구분함 -->
+	<!-- 디비랑 컬럼이 같을때는 자동으로 게터세터로 땡겨준다. -->
+	<!-- 컬럼명과 변수명이 다를경우, 리절트맵을 사용해서 컬럼,프로퍼티의 각항목을 맵핑해서 값을 받는다. -->
+	
+	<!-- resulttype은 com.mydto.Mydto이지만, alias를 줘서 Mydto만 입력하도록 한다. -->
+	<resultMap type="com.jbdto.JBCDto" id="JBCdto">
+		<result column="JBCNO" property="jbcno" />
+		<result column="JBNO" property="jbno" />
+		<result column="RELEVEL" property="relevel" />
+		<result column="REROUTE" property="reroute" />
+		<result column="EMAILORPHONE" property="emailorphone" />
+		<result column="NAME" property="name" />
+		<result column="CONTENT" property="content" />
+		<result column="BONGLIST" property="bonglist" />
+		<result column="BONGCOUNT" property="bongcount" />
+		<result column="JBDATE" property="jbdate" />
+		<result column="ENABLE" property="enable" />
+	</resultMap>
+
+
+	
+	<!-- 각 글의 댓글 페이징 계산. 테이블 전체 컬럼을 구해서 나중에 10단위로 페이징 할때 쓸거임 -->
+	<select id="selectrowcnt" parameterType="hashMap" resultType="int">
+	SELECT COUNT(NVL(JBCNO,0)) FROM JBOARDCOMMENT WHERE JBNO=#{jbno};
+	</select>
+
+	<!-- 각 글의 댓글 페이지 읽기. 셀렉트 컬럼들 프롬(셀렉트 로우넘 프롬(셀렉트 컬럼들 오더바이 REROUTE컬럼) 웨어 로우넘이 <= 큰범위) 웨어 로우넘이 >=작은범위 -->
+	<select id="selectPage" parameterType="hashMap" resultType="JBCdto">
+	SELECT X.RNUM, X.JBCNO, X.JBNO, X.RELEVEL, X.REROUTE, X.EMAILORPHONE, X.NAME, X.CONTENT, X.BONGLIST, X.BONGCOUNT, X.JBDATE
+	FROM ( 
+	SELECT ROWNUM AS RNUM, A.JBCNO, A.JBNO, A.RELEVEL, A.REROUTE, A.EMAILORPHONE, A.NAME, A.CONTENT, A.BONGLIST, A.BONGCOUNT, A.JBDATE
+    
+	FROM (
+	SELECT JBCNO,JBNO, RELEVEL, REROUTE, EMAILORPHONE, NAME, CONTENT, BONGLIST, BONGCOUNT, JBDATE
+   	FROM JBOARDCOMMENT 
+   	WHERE ENABLE='Y' AND JBNO=#{jbno}
+	ORDER BY REROUTE
+	) A
+	WHERE ROWNUM &lt;= #{commentbignum}
+	) X
+	WHERE X.RNUM &gt;= #{commentsmallnum}
+	</select>
+
+	<!-- 페이징이라 필요없을거같긴한데 일단 셀렉트올도 남겨놓음 -->
+	<select id="selectAll" resultMap="JBCdto">
+	SELECT JBCNO, JBNO, RELEVEL, REROUTE, EMAILORPHONE, NAME, CONTENT, BONGLIST, BONGCOUNT, JBDATE
+   	FROM JBOARDCOMMENT
+	ORDER BY REROUTE
+	</select>
+	
+	
+	<!-- jbdto.getJbno()라고 할 부분을 #{jbno}로 처리 -->
+	<!-- 필요없을거같긴한데 일단 셀렉트원도 남겨놓음 -->
+	<select id="selectOne" parameterType="HashMap" resultType="JBCdto">
+		SELECT *
+		FROM JBOARDCOMMENT WHERE JBCNO = #{jbcno}
+	</select>
+
+
+	<!-- 글쓰기 위한 jbcseq.nextval 획득 : reroute 값 작성을 위해 biz단에서 선 생성후 후 INSERT명령으로 입력. -->
+	<select id="getjbcseqnext" resultType="int">
+		SELECT JBCSEQ.NEXTVAL FROM DUAL
+	</select>
+	
+	
+	<!-- 
+	글쓰기.
+	#{relevel} = 부모글 level+1, 최대3으로 제한. 
+	#{reroute} = 부모 reroute + #{jbcno}+"/". biz에서 처리예정.
+	 -->
+	<insert id="insert" parameterType="JBCdto">
+		INSERT INTO JBOARDCOMMENT
+		VALUES(JBCSEQ.NEXTVAL, #{jbno},#{relevel}, #{reroute}, #{emailorphone}, #{name}, #{imgurl}, #{content}, '',0, SYSDATE,'Y')
+	</insert>
+
+	<!-- 글수정 -->
+	<update id="update" parameterType="JBCdto">
+		UPDATE JBOARDCOMMENT SET CONTENT=#{content},JBDATE=SYSDATE
+		WHERE JBNO=#{jbcno}
+	</update>
+
+	<!-- 글삭제 -->
+	<update id="update" parameterType="HashMap">
+		UPDATE JBOARDCOMMENT SET ENABLE='N',JBDATE=SYSDATE
+		WHERE JBCNO=#{jbcno}
+	</update>
+	
+	<!-- 
+	봉추가. 
+	bonglist = 기존 봉리스트 + "봉누른자ID" + "/"
+	bongcount = 기존글 bongcount +1
+	봉취소. 
+	bonglist = 기존 봉리스트 - ("봉누른자ID" + "/")
+	bongcount = 기존글 bongcount -1
+	-->
+	<update id="bongupdate" parameterType="JBCdto">
+		UPDATE JBOARDCOMMENT SET BONGLIST=#{bonglist}, BONGCOUNT=#{bongcount} 
+		WHERE JBCNO=#{jbcno}
+	</update>
+	
+	
+
+</mapper>

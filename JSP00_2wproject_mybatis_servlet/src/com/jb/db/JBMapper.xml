@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 맵퍼 네임 스페이스의 com.my.myboard는 그냥 이름임. -->
+<mapper namespace="com.jb.jboard">
+
+	<!-- column은 DB컬럼으로 대소문자 구분 없음. property는 dto변수명으로 대소문자 구분함 -->
+	<!-- 디비랑 컬럼이 같을때는 자동으로 게터세터로 땡겨준다. -->
+	<!-- 컬럼명과 변수명이 다를경우, 리절트맵을 사용해서 컬럼,프로퍼티의 각항목을 맵핑해서 값을 받는다. -->
+	
+	<!-- resulttype은 com.mydto.Mydto이지만, alias를 줘서 Mydto만 입력하도록 한다. -->
+	<resultMap type="com.jbdto.JBDto" id="JBdto">
+		<result column="JBNO" property="jbno" />
+		<result column="EMAILORPHONE" property="emailorphone" />
+		<result column="NAME" property="name" />
+		<result column="IMGURL" property="imgurl" />
+		<result column="CONTENT" property="content" />
+		<result column="BONGLIST" property="bonglist" />
+		<result column="BONGCOUNT" property="bongcount" />
+		<result column="JBDATE" property="jbdate" />
+		<result column="ENABLE" property="enable" />
+	</resultMap>
+
+	<!-- 페이징 계산. 테이블 전체 컬럼을 구해서 나중에 10단위로 페이징 할때 쓸거임 -->
+	<select id="selectrowcnt" resultType="int">
+	SELECT COUNT(NVL(JBNO,0)) FROM JBOARD; 
+	</select>
+
+	<!-- 페이지 읽기. 셀렉트 컬럼들 프롬(셀렉트 로우넘 프롬(셀렉트 컬럼들 오더바이) 웨어 로우넘이 <= 큰범위) 웨어 로우넘이 >=작은범위 -->
+	<select id="selectPage" parameterType="hashMap" resultType="JBdto">
+	SELECT X.RNUM, X.JBNO, X.EMAILORPHONE, X.NAME, X.IMGURL, X.CONTENT, X.BONGLIST, X.BONGCOUNT, X.JBDATE
+	FROM ( 
+	SELECT ROWNUM AS RNUM, A.JBNO, A.EMAILORPHONE, A.NAME, A.IMGURL, A.CONTENT, A.BONGLIST, A.BONGCOUNT, A.JBDATE
+    
+	FROM (
+	SELECT JBNO, EMAILORPHONE, NAME, IMGURL, CONTENT, BONGLIST, BONGCOUNT, JBDATE
+   	FROM JBOARD 
+   	WHERE ENABLE='Y'
+	ORDER BY JBDATE
+	) A
+	WHERE ROWNUM &lt;= #{pagebignum}
+	) X
+	WHERE X.RNUM &gt;= #{pagesmallnum}
+	</select>
+
+	<!-- 페이징이라 필요없을거같긴한데 일단 셀렉트올도 남겨놓음 -->
+	<select id="selectAll" resultMap="JBdto">
+	SELECT JBNO, EMAILORPHONE, NAME, IMGURL, CONTENT, BONGLIST, BONGCOUNT, JBDATE
+   	FROM JBOARD
+	ORDER BY JBDATE
+	</select>
+	
+	
+	<!-- jbdto.getJbno()라고 할 부분을 #{jbno}로 처리 -->
+	<!-- 필요없을거같긴한데 일단 셀렉트원도 남겨놓음 -->
+	<select id="selectOne" parameterType="HashMap" resultType="JBdto">
+		SELECT *
+		FROM JBOARD WHERE JBNO = #{jbno}
+	</select>
+
+	<!-- 글쓰기 -->
+	<insert id="insert" parameterType="JBdto">
+		INSERT INTO JBOARD
+		VALUES(JBSEQ.NEXTVAL, #{emailorphone}, #{name}, #{imgurl}, #{content}, '',0, SYSDATE,'Y')
+	</insert>
+
+	<!-- 글수정 -->
+	<update id="update" parameterType="JBdto">
+		UPDATE JBOARD SET CONTENT=#{content},JBDATE=SYSDATE
+		WHERE JBNO=#{jbno}
+	</update>
+
+	<!-- 글삭제 -->
+	<update id="enableN" parameterType="JBdto">
+		UPDATE JBOARD SET ENABLE='N',JBDATE=SYSDATE
+		WHERE JBNO=#{jbno}
+	</update>
+	
+	<!-- 
+	봉추가. 
+	bonglist = 기존 봉리스트 + "봉누른자ID" + "/"
+	bongcount = 기존글 bongcount +1
+	봉취소. 
+	bonglist = 기존 봉리스트 - ("봉누른자ID" + "/")
+	bongcount = 기존글 bongcount -1
+	-->
+	<update id="bongupdate" parameterType="HashMap">
+		UPDATE JBOARD SET BONGLIST=#{bonglist}, BONGCOUNT=#{bongcount} 
+		WHERE JBNO=#{jbno}
+	</update>
+	
+	
+
+</mapper>
